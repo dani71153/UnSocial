@@ -19,6 +19,16 @@
 - **Feed authentication** — Optional token-based auth to protect feeds when exposed publicly
 - **Portable** — Single-exe portable build; data is stored next to the executable
 
+## NEW FEATURES ! 😁😁😁
+
+- **Feed labels & filters** — Add custom labels and per‑feed filters (keywords, media‑only, minimum likes) with export in RSS/Atom.
+- **UI enhancements** — Feed cards show label chips and filter badges; modals for editing labels and filters; dynamic tabs by label; global search bar in the toolbar.
+- **HTTP cache control** — Cache disabled by default to avoid issues with RSS readers; toggle in options to enable/disable; /feed/test endpoint for quick connectivity checks.
+- **OPML export improvements** — Single OPML file export with native save dialog; corrected URLs; improved compatibility with RSS readers.
+- **RSS XML fixes** — Valid XML generation with proper handling of empty categories, invalid dates, and missing links.
+- **Auto‑refresh system** — Configurable fixed‑interval auto refresh with countdown display in the UI.
+- **Smart staggered refresh** — User‑configurable parameters (minimum, maximum, staleness cap) and option to enable/disable the system.
+
 ## Getting Started
 
 ### Prerequisites
