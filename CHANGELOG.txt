@@ -1,0 +1,203 @@
+CAMBIOS REALIZADOS EN UNSOCIAL
+==============================
+Fecha: 2026-04-15
+
+
+1. FILTROS Y ETIQUETAS POR FEED
+--------------------------------
+Archivos: src/main.js, src/rss-generator.js, src/preload.js,
+          src/renderer/index.html, src/renderer/app.js, src/renderer/styles.css
+
+- Nuevo campo `labels` en cada feed: array de etiquetas definidas por el usuario.
+- Nuevo campo `filters` en cada feed: objeto con criterios de filtrado de posts.
+  - includeKeywords: solo posts que contengan estas palabras.
+  - excludeKeywords: excluir posts que contengan estas palabras.
+  - mediaOnly: solo posts con imagen o video.
+  - minLikes: descartar posts con menos X likes.
+- Nuevo campo global `allLabels` en el store para gestionar las etiquetas disponibles.
+- Las etiquetas se publican como <category> en el RSS/Atom exportado.
+- Los filtros se aplican al regenerar el feed antes de escribir el XML.
+- 4 handlers IPC nuevos: set-feed-labels, set-feed-filters, get-all-labels, set-all-labels.
+- 4 metodos nuevos en preload.js: setFeedLabels, setFeedFilters, getAllLabels, setAllLabels.
+- generateFeed() recibe ahora el feedEntry completo para aplicar filtros y etiquetas.
+- refresh-feed y refresh-all pasan el feedEntry a generateFeed.
+
+
+2. UI: TARJETAS DE FEED CON ETIQUETAS Y FILTROS
+------------------------------------------------
+Archivos: src/renderer/app.js, src/renderer/styles.css
+
+- Chips de etiquetas visibles en cada tarjeta de feed.
+- Badge de embudo (⚗) en la tarjeta cuando el feed tiene filtros activos.
+- Boton de etiquetas (icono tag) en cada tarjeta: abre el modal de etiquetas.
+- Boton de filtros (icono embudo) en cada tarjeta: abre el modal de filtros.
+  El boton se pone en amarillo cuando hay filtros activos.
+
+
+3. UI: MODAL DE ETIQUETAS
+--------------------------
+Archivos: src/renderer/index.html, src/renderer/app.js, src/renderer/styles.css
+
+- Modal con chips removibles de las etiquetas actuales del feed.
+- Input para agregar nuevas etiquetas (Enter o boton + Agregar).
+- Las etiquetas nuevas se guardan tambien en la lista global.
+- Botones: Guardar / Cancelar. Clic fuera del modal lo cierra.
+
+
+4. UI: MODAL DE FILTROS
+------------------------
+Archivos: src/renderer/index.html, src/renderer/app.js, src/renderer/styles.css
+
+- Modal con 4 campos: incluir keywords, excluir keywords, solo media, minimo likes.
+- Al guardar, regenera el feed inmediatamente aplicando los nuevos filtros.
+- Boton "Limpiar filtros" para eliminar todos los criterios de una vez.
+- Botones: Guardar y regenerar / Limpiar filtros / Cancelar.
+
+
+5. UI: TABS DE ETIQUETAS EN LA LISTA DE FEEDS
+----------------------------------------------
+Archivo: src/renderer/app.js
+
+- Los tabs de plataforma (Instagram, Twitter, etc.) se mantienen igual.
+- Se agregan tabs adicionales por cada etiqueta existente (prefijo # interno).
+  Ejemplo: si hay feeds con etiqueta "tech", aparece un tab "🏷 tech".
+- Al hacer clic en un tab de etiqueta, muestra todos los feeds de esa etiqueta
+  sin importar la plataforma.
+
+
+6. BOTON DE FILTRO GLOBAL EN EL TOOLBAR
+-----------------------------------------
+Archivos: src/renderer/index.html, src/renderer/app.js, src/renderer/styles.css
+
+- Boton de embudo agregado al toolbar junto a los botones existentes (+, ojo, refresh, OPML).
+- Al pulsarlo aparece una barra de busqueda debajo del formulario.
+- Filtra los feeds en tiempo real por: nombre (alias), usuario o etiqueta.
+- El boton se pone en rosa cuando el filtro esta activo.
+- Escape o volver a pulsar el boton cierra la barra y limpia el filtro.
+
+
+7. CACHE HTTP DESACTIVADO POR DEFECTO
+---------------------------------------
+Archivos: src/feed-server.js, src/main.js, src/preload.js,
+          src/renderer/index.html, src/renderer/app.js
+
+- El servidor ahora responde con Cache-Control: no-store por defecto.
+- Esto evita que lectores RSS como RSS Guard reciban 304 sin body.
+- Nuevo campo `httpCacheEnabled` en el store (false por defecto).
+- 2 handlers IPC nuevos: get-http-cache-enabled, set-http-cache-enabled.
+- Cuando el cache esta desactivado: etag: false, lastModified: false en sendFile.
+
+
+8. BOTON DE TOGGLE DE CACHE EN OPCIONES
+-----------------------------------------
+Archivos: src/renderer/index.html, src/renderer/app.js
+
+- Nueva seccion "HTTP Cache" en el panel Public Access.
+- Muestra el estado actual (Activado / Desactivado).
+- Boton para alternar el cache con un clic.
+- Por defecto: Desactivado (recomendado para uso local).
+
+
+9. ENDPOINT DE PRUEBA /feed/test
+----------------------------------
+Archivos: src/feed-server.js, src/renderer/index.html, src/renderer/app.js
+
+- Nuevo endpoint GET /feed/test que devuelve siempre un RSS minimo valido.
+- No requiere autenticacion. Siempre responde Cache-Control: no-store.
+- Util para verificar que el lector RSS se conecta antes de probar feeds reales.
+- Nueva seccion "Feed de prueba" en el panel Public Access con dos botones:
+  - Copiar URL: copia http://localhost:3845/feed/test al portapapeles.
+  - Abrir en navegador: abre la URL directamente.
+
+
+10. EXPORTACION OPML CON DIALOGO DE GUARDADO
+----------------------------------------------
+Archivos: src/main.js, src/renderer/app.js
+
+- Al pulsar el boton de exportar OPML ahora se abre el dialogo nativo de Windows.
+- El usuario elige la carpeta y el nombre del archivo antes de exportar.
+- Nombre por defecto: unsocial-feeds.opml (en la carpeta Documentos).
+- Filtros de archivo: .opml y .xml.
+- Todos los feeds se exportan en UN SOLO archivo OPML con grupos por plataforma
+  (antes se exportaba un archivo por plataforma sin dialogo).
+- Si el usuario cancela el dialogo, no ocurre nada (sin error).
+
+
+11. CORRECCION: URLS INCORRECTAS EN EL OPML
+---------------------------------------------
+Archivo: src/main.js
+
+- Cuando no hay tunel configurado, las URLs del OPML usaban https:///feed/...
+  (dominio vacio) resultando en URLs invalidas.
+- Corregido: sin tunel se usa resolveFeedBaseUrl() que devuelve http://localhost:PORT.
+- Con tunel configurado sigue usando https://dominio/feed/...
+
+
+12. CORRECCION: XML INVALIDO EN EL FEED RSS
+---------------------------------------------
+Archivo: src/rss-generator.js
+
+- category: [] (array vacio) generaba <category/> en el XML que Fluent Reader rechazaba.
+  Corregido: solo se agrega el campo category cuando el feed tiene etiquetas.
+- Fechas invalidas (timestamp null o malformado) generaban "Invalid Date" en el XML.
+  Corregido: si la fecha es invalida se usa la fecha actual como fallback.
+- id y link vacios generaban atributos vacios en el XML.
+  Corregido: fallback a siteUrl cuando permalink viene vacio.
+
+
+13. CRONOMETRADOR DE ACTUALIZACION AUTOMATICA (AUTO REFRESH)
+-------------------------------------------------------------
+Archivos: src/main.js, src/preload.js, src/renderer/index.html,
+          src/renderer/app.js, src/renderer/styles.css
+
+Contexto: el campo checkIntervalMinutes y la variable autoRefreshInterval existian
+en el codigo original pero nunca fueron implementados. Se completaron en esta sesion.
+
+- Nuevo campo `autoRefreshEnabled` en el store (false por defecto).
+- Funcion startAutoRefresh(): lanza un setInterval que refresca TODOS los feeds
+  cada N minutos configurables.
+- Funcion stopAutoRefresh(): detiene el intervalo y limpia el estado.
+- 2 handlers IPC nuevos: get-auto-refresh, set-auto-refresh.
+- Nuevo evento IPC: auto-refresh-tick — notifica al renderer cuando cambia
+  el proximo ciclo (nextAt: ISO timestamp).
+- Nueva seccion "Actualizacion automatica" en el panel Public Access:
+  - Campo de intervalo en minutos (minimo 1, por defecto 30).
+  - Boton Activar/Desactivar — al activar, el campo se bloquea.
+  - Countdown regresivo en verde (MM:SS o HH:MM:SS) hasta la proxima ejecucion.
+- El estado persiste al reiniciar la app: si estaba activo, se reanuda.
+- Diferencia con Smart Refresh: este refresca TODOS los feeds a la vez en
+  intervalo fijo; el Smart Refresh refresca uno por uno con intervalo aleatorio.
+
+
+14. CONFIGURACION DEL SMART STAGGERED REFRESH
+----------------------------------------------
+Archivos: src/main.js, src/preload.js, src/renderer/index.html,
+          src/renderer/app.js, src/renderer/styles.css
+
+Contexto: el Smart Staggered Refresh ya existia y funcionaba en background,
+pero sus parametros estaban hardcodeados. Ahora son configurables por el usuario.
+
+Como funciona el Smart Refresh (original):
+- Refresca el feed mas antiguo primero (ordenado por lastChecked).
+- Usa un intervalo ALEATORIO entre un minimo y un maximo para evitar
+  deteccion de patrones por rate limiting de las plataformas.
+- Si un feed supera el limite de obsolescencia, acorta el intervalo
+  automaticamente para no superar ese cap.
+- Si un feed falla, le suma 30 min al lastChecked para no bloquear al resto.
+
+Parametros ahora configurables (antes hardcodeados):
+- Minimo de intervalo: default 25 min (antes fijo en 25).
+- Maximo de intervalo: default 65 min (antes fijo en 65).
+- Limite de obsolescencia: default 6 horas (antes fijo en 6h).
+- Enable/disable completo del sistema.
+
+Cambios tecnicos:
+- getRandomInterval() ahora lee smartRefreshMinMinutes y smartRefreshMaxMinutes del store.
+- getStaleCapMs() nueva funcion que lee smartRefreshStaleCapHours del store.
+- scheduleNextRefresh() revisa smartRefreshEnabled antes de programar el siguiente ciclo.
+- 2 handlers IPC nuevos: get-smart-refresh, set-smart-refresh.
+- Al guardar configuracion, reinicia el scheduler con los nuevos parametros.
+- Nueva seccion "Smart Refresh (aleatorio)" en el panel Public Access:
+  - 3 campos: minimo (min), maximo (min), limite obsolescencia (h).
+  - Boton Guardar: aplica cambios y reinicia el scheduler.
+  - Boton Activar/Desactivar: habilita o deshabilita el sistema completo.

@@ -84,6 +84,11 @@ const store = new Store({
     feeds: [],       // Array of { url, username, alias, lastChecked, labels, filters }
     serverPort: 3845,
     checkIntervalMinutes: 30,
+    autoRefreshEnabled: false, // User-controlled periodic refresh-all timer
+    smartRefreshEnabled: true, // Smart staggered background refresher
+    smartRefreshMinMinutes: 25,
+    smartRefreshMaxMinutes: 65,
+    smartRefreshStaleCapHours: 6,
     tunnelDomain: '',
     tunnelName: 'unsocial-tunnel',
     tunnelAutoStart: false,
@@ -272,21 +277,29 @@ let refreshTimeout = null;
 let isRefreshing = false;
 
 function getRandomInterval() {
-  // Random interval between 25 and 65 minutes (in ms)
-  const minMinutes = 25;
-  const maxMinutes = 65;
-  const minutes = minMinutes + Math.random() * (maxMinutes - minMinutes);
+  const minMinutes = store.get('smartRefreshMinMinutes', 25);
+  const maxMinutes = store.get('smartRefreshMaxMinutes', 65);
+  const min = Math.min(minMinutes, maxMinutes);
+  const max = Math.max(minMinutes, maxMinutes);
+  const minutes = min + Math.random() * (max - min);
   return Math.round(minutes * 60 * 1000);
 }
 
-const MAX_STALE_MS = 6 * 60 * 60 * 1000; // 6 hours hard cap
+function getStaleCapMs() {
+  return store.get('smartRefreshStaleCapHours', 6) * 60 * 60 * 1000;
+}
 
 function scheduleNextRefresh() {
   if (refreshTimeout) clearTimeout(refreshTimeout);
 
+  if (!store.get('smartRefreshEnabled', true)) {
+    console.log('[Smart-refresh] Disabled — skipping schedule');
+    return;
+  }
+
   let interval = getRandomInterval();
 
-  // Check the oldest feed's staleness and cap interval so it never exceeds 6 h
+  // Check the oldest feed's staleness and cap interval so it never exceeds the stale cap
   try {
     const feeds = store.get('feeds');
     if (feeds.length > 0) {
@@ -299,13 +312,11 @@ function scheduleNextRefresh() {
         ? new Date(sorted[0].lastChecked).getTime()
         : 0;
       const age = Date.now() - oldestTime;
-      const timeUntilStale = MAX_STALE_MS - age;
+      const timeUntilStale = getStaleCapMs() - age;
 
       if (timeUntilStale <= 0) {
-        // Already over 6 h — refresh immediately (tiny delay to avoid tight loop)
-        interval = 5 * 1000; // 5 seconds
+        interval = 5 * 1000;
       } else if (timeUntilStale < interval) {
-        // Shorten wait so we refresh before the 6-h mark (with 2-min buffer)
         interval = Math.max(timeUntilStale - 2 * 60 * 1000, 5 * 1000);
       }
     }
@@ -408,6 +419,123 @@ async function refreshOldestFeed() {
   }
 }
 
+// ── User-controlled Auto Refresh ───────────────────────────────────────────
+
+let autoRefreshNextAt = null; // ISO timestamp of next scheduled refresh-all
+
+function startAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+  const minutes = Math.max(1, store.get('checkIntervalMinutes', 30));
+  const ms = minutes * 60 * 1000;
+  autoRefreshNextAt = new Date(Date.now() + ms).toISOString();
+
+  autoRefreshInterval = setInterval(async () => {
+    console.log(`[AutoRefresh] Triggering refresh-all (every ${minutes} min)`);
+    try {
+      const feeds = store.get('feeds');
+      for (const feed of feeds) {
+        try {
+          const platform = feed.platform || 'instagram';
+          let profileData;
+          if (platform === 'twitter') profileData = await scrapeTwitterProfile(feed.username);
+          else if (platform === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl);
+          else if (platform === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username);
+          else if (platform === 'txt') profileData = await scrapeTxtFile(feed.fullUrl || feed.url);
+          else if (platform === 'custom') profileData = await scrapeCustomSiteHeadless(feed.fullUrl, feed.selector, feed.alias || feed.username, feed.scrollSelector, feed.scrollCount);
+          else profileData = await scrapeInstagramProfile(feed.username);
+
+          await generateFeed((feed.feedKey || feed.username).replace(/\//g, '-'), profileData, store, platform, feed);
+
+          const currentFeeds = store.get('feeds');
+          const idx = currentFeeds.findIndex(f => f.username === feed.username && (f.platform || 'instagram') === platform);
+          if (idx !== -1) {
+            currentFeeds[idx].lastChecked = new Date().toISOString();
+            currentFeeds[idx].postCount = profileData.posts.length;
+            store.set('feeds', currentFeeds);
+          }
+        } catch (err) {
+          addNotification('error', `[AutoRefresh] Failed @${feed.username}: ${err.message}`);
+        }
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('feeds-updated');
+      }
+    } catch (err) {
+      console.error('[AutoRefresh] Error:', err.message);
+    }
+    autoRefreshNextAt = new Date(Date.now() + ms).toISOString();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('auto-refresh-tick', { nextAt: autoRefreshNextAt });
+    }
+  }, ms);
+
+  console.log(`[AutoRefresh] Started — every ${minutes} min, next at ${autoRefreshNextAt}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('auto-refresh-tick', { nextAt: autoRefreshNextAt });
+  }
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+  autoRefreshNextAt = null;
+  console.log('[AutoRefresh] Stopped');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('auto-refresh-tick', { nextAt: null });
+  }
+}
+
+ipcMain.handle('get-auto-refresh', () => ({
+  enabled: store.get('autoRefreshEnabled', false),
+  intervalMinutes: store.get('checkIntervalMinutes', 30),
+  nextAt: autoRefreshNextAt,
+}));
+
+ipcMain.handle('set-auto-refresh', (_e, { enabled, intervalMinutes }) => {
+  store.set('autoRefreshEnabled', enabled);
+  if (intervalMinutes) store.set('checkIntervalMinutes', Math.max(1, intervalMinutes));
+  if (enabled) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
+  return {
+    enabled: store.get('autoRefreshEnabled'),
+    intervalMinutes: store.get('checkIntervalMinutes'),
+    nextAt: autoRefreshNextAt,
+  };
+});
+
+ipcMain.handle('get-smart-refresh', () => ({
+  enabled: store.get('smartRefreshEnabled', true),
+  minMinutes: store.get('smartRefreshMinMinutes', 25),
+  maxMinutes: store.get('smartRefreshMaxMinutes', 65),
+  staleCapHours: store.get('smartRefreshStaleCapHours', 6),
+}));
+
+ipcMain.handle('set-smart-refresh', (_e, { enabled, minMinutes, maxMinutes, staleCapHours }) => {
+  store.set('smartRefreshEnabled', enabled);
+  if (minMinutes != null) store.set('smartRefreshMinMinutes', Math.max(1, minMinutes));
+  if (maxMinutes != null) store.set('smartRefreshMaxMinutes', Math.max(1, maxMinutes));
+  if (staleCapHours != null) store.set('smartRefreshStaleCapHours', Math.max(1, staleCapHours));
+
+  // Restart the scheduler with new settings
+  if (refreshTimeout) clearTimeout(refreshTimeout);
+  if (enabled) scheduleNextRefresh();
+
+  return {
+    enabled: store.get('smartRefreshEnabled'),
+    minMinutes: store.get('smartRefreshMinMinutes'),
+    maxMinutes: store.get('smartRefreshMaxMinutes'),
+    staleCapHours: store.get('smartRefreshStaleCapHours'),
+  };
+});
+
 // ── App Lifecycle ──────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -420,6 +548,7 @@ app.whenReady().then(async () => {
   startInternetMonitor();
   startStaleFeedMonitor();
   scheduleNextRefresh();
+  if (store.get('autoRefreshEnabled', false)) startAutoRefresh();
 
   // Forward tunnel status changes to the renderer + update tray icon
   tunnel.onTunnelStatusChange((data) => {
@@ -1474,46 +1603,70 @@ ipcMain.handle('open-external', (_e, url) => {
   shell.openExternal(url);
 });
 
-ipcMain.handle('export-opml', (_e, groups, tunnelDomain) => {
+ipcMain.handle('export-opml', async (_e, groups, tunnelDomain) => {
+  const { dialog } = require('electron');
+
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Exportar feeds como OPML',
+    defaultPath: path.join(app.getPath('documents'), 'unsocial-feeds.opml'),
+    filters: [
+      { name: 'OPML', extensions: ['opml', 'xml'] },
+      { name: 'Todos los archivos', extensions: ['*'] },
+    ],
+    properties: ['createDirectory'],
+  });
+
+  if (canceled || !filePath) {
+    return { success: false, canceled: true };
+  }
+
   try {
-    // Determine export directory: beside the exe for portable, or app path
-    const exportDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
     const feedTokenExport = store.get('feedToken');
     const tokenSuffix = feedTokenExport ? `?token=${feedTokenExport}` : '';
-    let fileCount = 0;
 
+    // Use tunnel domain if available, otherwise fall back to local server
+    const { resolveFeedBaseUrl } = require('./feed-url-base');
+    const feedBase = tunnelDomain
+      ? `https://${tunnelDomain}`
+      : resolveFeedBaseUrl(store);
+
+    const platformUrlBase = {
+      'Instagram': 'https://www.instagram.com/',
+      'Twitter': 'https://x.com/',
+      'Facebook': 'https://www.facebook.com/',
+      'LinkedIn': 'https://www.linkedin.com/in/',
+      'Text': '',
+      'Custom': '',
+    };
+
+    let groupOutlines = '';
     for (const [category, feeds] of Object.entries(groups)) {
-      const platformMap = { 'Instagram': 'instagram', 'Twitter': 'twitter', 'Facebook': 'facebook', 'LinkedIn': 'linkedin', 'Text': 'txt', 'Custom': 'custom' };
-      const platformUrlBase = {
-        'Instagram': 'https://www.instagram.com/',
-        'Twitter': 'https://x.com/',
-        'Facebook': 'https://www.facebook.com/',
-        'LinkedIn': 'https://www.linkedin.com/in/',
-        'Text': '',
-        'Custom': '',
-      };
-
       let outlines = '';
       for (const feed of feeds) {
         const feedKey = (feed.feedKey || feed.username).replace(/\//g, '-');
-        const xmlUrl = `https://${tunnelDomain}/feed/${feedKey}${tokenSuffix}`;
-        const htmlUrl = feed.platform === 'txt'
+        const xmlUrl = `${feedBase}/feed/${feedKey}${tokenSuffix}`;
+        const htmlUrl = feed.platform === 'txt' || feed.platform === 'custom'
           ? (feed.fullUrl || feed.url || '')
-          : feed.platform === 'custom'
-            ? (feed.fullUrl || feed.url || '')
-            : `${platformUrlBase[category] || ''}${feed.username}/`;
+          : `${platformUrlBase[category] || ''}${feed.username}/`;
         const title = escapeXml(feed.alias || feed.username);
         outlines += `      <outline text="${title}" title="${title}" type="rss" xmlUrl="${escapeXml(xmlUrl)}" htmlUrl="${escapeXml(htmlUrl)}"/>\n`;
       }
-
-      const opml = `<?xml version="1.0" encoding="UTF-8"?>\n<opml version="1.0">\n  <head>\n    <title>${category} feeds from UnSocial</title>\n  </head>\n  <body>\n    <outline text="${category}" title="${category}">\n${outlines}    </outline>\n  </body>\n</opml>\n`;
-
-      const filePath = path.join(exportDir, `${category}.xml`);
-      fs.writeFileSync(filePath, opml, 'utf-8');
-      fileCount++;
+      groupOutlines += `    <outline text="${escapeXml(category)}" title="${escapeXml(category)}">\n${outlines}    </outline>\n`;
     }
 
-    return { success: true, fileCount };
+    const opml = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>UnSocial feeds</title>
+    <dateCreated>${new Date().toUTCString()}</dateCreated>
+  </head>
+  <body>
+${groupOutlines}  </body>
+</opml>`;
+
+    const fs = require('fs');
+    fs.writeFileSync(filePath, opml, 'utf-8');
+    return { success: true, filePath };
   } catch (err) {
     console.error('[Export OPML] Error:', err.message);
     return { success: false, error: err.message };

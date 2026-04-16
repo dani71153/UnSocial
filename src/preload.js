@@ -46,6 +46,15 @@ contextBridge.exposeInMainWorld('api', {
   getHttpCacheEnabled: () => ipcRenderer.invoke('get-http-cache-enabled'),
   setHttpCacheEnabled: (enabled) => ipcRenderer.invoke('set-http-cache-enabled', enabled),
 
+  // Auto Refresh
+  getAutoRefresh: () => ipcRenderer.invoke('get-auto-refresh'),
+  setAutoRefresh: (settings) => ipcRenderer.invoke('set-auto-refresh', settings),
+  onAutoRefreshTick: (cb) => ipcRenderer.on('auto-refresh-tick', (_e, data) => cb(data)),
+
+  // Smart Staggered Refresh
+  getSmartRefresh: () => ipcRenderer.invoke('get-smart-refresh'),
+  setSmartRefresh: (settings) => ipcRenderer.invoke('set-smart-refresh', settings),
+
   // Server
   getServerPort: () => ipcRenderer.invoke('get-server-port'),
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>UnSocial feeds</title>
+    <dateCreated>Wed, 15 Apr 2026 12:52:30 GMT</dateCreated>
+  </head>
+  <body>
+    <outline text="Instagram" title="Instagram">
+      <outline text="miculturard" title="miculturard" type="rss" xmlUrl="http://localhost:3845/feed/miculturard" htmlUrl="https://www.instagram.com/miculturard/"/>
+      <outline text="diariolibre" title="diariolibre" type="rss" xmlUrl="http://localhost:3845/feed/diariolibre" htmlUrl="https://www.instagram.com/diariolibre/"/>
+    </outline>
+  </body>
+</opml>

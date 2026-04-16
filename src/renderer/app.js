@@ -91,6 +91,14 @@ let globalFilterActive = false;
   // Load HTTP cache setting
   updateCacheUI(await window.api.getHttpCacheEnabled());
 
+  // Load auto-refresh setting
+  const arSettings = await window.api.getAutoRefresh();
+  updateAutoRefreshUI(arSettings);
+
+  // Load smart-refresh setting
+  const srSettings = await window.api.getSmartRefresh();
+  updateSmartRefreshUI(srSettings);
+
   const feedPublicBaseInput = $('#feed-public-base-input');
   if (feedPublicBaseInput) {
     feedPublicBaseInput.value = await window.api.getFeedPublicBaseUrl();
@@ -537,6 +545,124 @@ btnTokenClear.addEventListener('click', async () => {
   updateTokenUI();
   await renderFeeds();
   toast('Token removed — feeds are now public', 'success');
+});
+
+// ── Smart Staggered Refresh ───────────────────────────────────────────────
+
+const smartRefreshStatus  = $('#smart-refresh-status');
+const smartMinInput       = $('#smart-min-input');
+const smartMaxInput       = $('#smart-max-input');
+const smartStaleInput     = $('#smart-stale-input');
+const btnSmartSave        = $('#btn-smart-refresh-save');
+const btnSmartToggle      = $('#btn-smart-refresh-toggle');
+
+function updateSmartRefreshUI({ enabled, minMinutes, maxMinutes, staleCapHours }) {
+  smartMinInput.value   = minMinutes;
+  smartMaxInput.value   = maxMinutes;
+  smartStaleInput.value = staleCapHours;
+  if (enabled) {
+    smartRefreshStatus.textContent = 'Activado';
+    smartRefreshStatus.className   = 'token-status enabled';
+    btnSmartToggle.textContent     = 'Desactivar';
+    btnSmartToggle.className       = 'btn btn-outline btn-sm';
+  } else {
+    smartRefreshStatus.textContent = 'Desactivado';
+    smartRefreshStatus.className   = 'token-status disabled';
+    btnSmartToggle.textContent     = 'Activar';
+    btnSmartToggle.className       = 'btn btn-primary btn-sm';
+  }
+}
+
+btnSmartSave.addEventListener('click', async () => {
+  const current = await window.api.getSmartRefresh();
+  const result = await window.api.setSmartRefresh({
+    enabled: current.enabled,
+    minMinutes: parseInt(smartMinInput.value, 10) || 25,
+    maxMinutes: parseInt(smartMaxInput.value, 10) || 65,
+    staleCapHours: parseInt(smartStaleInput.value, 10) || 6,
+  });
+  updateSmartRefreshUI(result);
+  toast('Configuración del Smart Refresh guardada', 'success');
+});
+
+btnSmartToggle.addEventListener('click', async () => {
+  const current = await window.api.getSmartRefresh();
+  const result = await window.api.setSmartRefresh({ enabled: !current.enabled });
+  updateSmartRefreshUI(result);
+  toast(result.enabled ? 'Smart Refresh activado' : 'Smart Refresh desactivado', 'success');
+});
+
+// ── Auto Refresh ─────────────────────────────────────────────────────────
+
+const btnAutoRefreshToggle = $('#btn-auto-refresh-toggle');
+const autoRefreshStatus   = $('#auto-refresh-status');
+const autoRefreshInterval = $('#auto-refresh-interval');
+const autoRefreshCountdown = $('#auto-refresh-countdown');
+const autoRefreshTimer    = $('#auto-refresh-timer');
+
+let countdownInterval = null;
+let nextRefreshAt = null;
+
+function updateAutoRefreshUI({ enabled, intervalMinutes, nextAt }) {
+  autoRefreshInterval.value = intervalMinutes || 30;
+  nextRefreshAt = nextAt || null;
+
+  if (enabled) {
+    autoRefreshStatus.textContent = 'Activado';
+    autoRefreshStatus.className = 'token-status enabled';
+    btnAutoRefreshToggle.textContent = 'Desactivar';
+    btnAutoRefreshToggle.className = 'btn btn-outline btn-sm';
+    autoRefreshInterval.disabled = true;
+    autoRefreshCountdown.style.display = '';
+    startCountdown();
+  } else {
+    autoRefreshStatus.textContent = 'Desactivado';
+    autoRefreshStatus.className = 'token-status disabled';
+    btnAutoRefreshToggle.textContent = 'Activar';
+    btnAutoRefreshToggle.className = 'btn btn-primary btn-sm';
+    autoRefreshInterval.disabled = false;
+    autoRefreshCountdown.style.display = 'none';
+    stopCountdown();
+  }
+}
+
+function startCountdown() {
+  stopCountdown();
+  countdownInterval = setInterval(() => {
+    if (!nextRefreshAt) { autoRefreshTimer.textContent = '--:--'; return; }
+    const diffMs = new Date(nextRefreshAt).getTime() - Date.now();
+    if (diffMs <= 0) { autoRefreshTimer.textContent = '00:00'; return; }
+    const totalSec = Math.floor(diffMs / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    autoRefreshTimer.textContent = h > 0
+      ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+}
+
+function stopCountdown() {
+  if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+}
+
+btnAutoRefreshToggle.addEventListener('click', async () => {
+  const current = await window.api.getAutoRefresh();
+  const minutes = parseInt(autoRefreshInterval.value, 10) || 30;
+  const result = await window.api.setAutoRefresh({ enabled: !current.enabled, intervalMinutes: minutes });
+  updateAutoRefreshUI(result);
+  toast(result.enabled
+    ? `Actualización automática cada ${minutes} min activada`
+    : 'Actualización automática desactivada', 'success');
+});
+
+window.api.onAutoRefreshTick(({ nextAt }) => {
+  nextRefreshAt = nextAt;
+  if (nextAt) {
+    autoRefreshCountdown.style.display = '';
+    startCountdown();
+    renderFeeds();
+  }
 });
 
 // ── Test Feed ────────────────────────────────────────────────────────────
@@ -1258,8 +1384,10 @@ async function exportOpml() {
     }
 
     const result = await window.api.exportOpml(groups, tunnelDomain);
-    if (result.success) {
-      toast(`Exported ${result.fileCount} OPML file(s)`, 'success');
+    if (result.canceled) {
+      // User dismissed the dialog — do nothing
+    } else if (result.success) {
+      toast(`OPML exportado correctamente`, 'success');
       pulseSuccess(btnCopyOpml);
     } else {
       toast(result.error || 'Export failed', 'error');

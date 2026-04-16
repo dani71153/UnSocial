@@ -295,6 +295,57 @@
             </div>
           </div>
 
+          <!-- Smart Staggered Refresh -->
+          <div class="token-section" id="smart-refresh-section">
+            <div class="token-header">
+              <span class="token-icon">🎲</span>
+              <strong>Smart Refresh (aleatorio)</strong>
+              <span class="token-status" id="smart-refresh-status">Activado</span>
+            </div>
+            <div class="token-body">
+              <p class="lan-feed-base-hint">Refresca el feed más antiguo en un intervalo aleatorio para evitar detección por rate limiting. El intervalo se acorta automáticamente si algún feed supera el límite de obsolescencia.</p>
+              <div class="smart-refresh-grid">
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="smart-min-input">Mínimo (min)</label>
+                  <input type="number" id="smart-min-input" class="modal-input modal-input-sm" min="1" value="25" />
+                </div>
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="smart-max-input">Máximo (Max)</label>
+                  <input type="number" id="smart-max-input" class="modal-input modal-input-sm" min="1" value="65" />
+                </div>
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="smart-stale-input">Límite obsolescencia (h)</label>
+                  <input type="number" id="smart-stale-input" class="modal-input modal-input-sm" min="1" value="6" />
+                </div>
+              </div>
+              <div class="token-actions">
+                <button class="btn btn-outline btn-sm" id="btn-smart-refresh-save">Guardar</button>
+                <button class="btn btn-outline btn-sm" id="btn-smart-refresh-toggle">Desactivar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto Refresh -->
+          <div class="token-section" id="auto-refresh-section">
+            <div class="token-header">
+              <span class="token-icon">⏱</span>
+              <strong>Actualización automática</strong>
+              <span class="token-status" id="auto-refresh-status">Desactivado</span>
+            </div>
+            <div class="token-body">
+              <div class="auto-refresh-row">
+                <label class="filter-label" for="auto-refresh-interval">Intervalo (minutos):</label>
+                <input type="number" id="auto-refresh-interval" class="modal-input modal-input-sm" min="1" max="1440" value="30" />
+              </div>
+              <div id="auto-refresh-countdown" class="auto-refresh-countdown" style="display:none;">
+                Próxima actualización en <span id="auto-refresh-timer">--:--</span>
+              </div>
+              <div class="token-actions">
+                <button class="btn btn-primary btn-sm" id="btn-auto-refresh-toggle">Activar</button>
+              </div>
+            </div>
+          </div>
+
           <!-- HTTP Cache -->
           <div class="token-section" id="cache-section">
             <div class="token-header">

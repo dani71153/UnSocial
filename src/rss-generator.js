@@ -117,13 +117,15 @@ async function generateFeed(username, profileData, store, platform, feedEntry) {
       : '';
     const statsHtml = `<p><small>❤️ ${post.likes} · 💬 ${post.comments}</small></p>`;
 
-    feed.addItem({
+    const itemDate = post.timestamp ? new Date(post.timestamp) : new Date();
+
+    const item = {
       title,
-      id: post.permalink,
-      link: post.permalink,
+      id: post.permalink || `${username}-${Date.now()}`,
+      link: post.permalink || siteUrl,
       description: truncate(post.caption || '', 300),
       content: `${imageHtml}${videoHtml}${captionHtml}${statsHtml}`,
-      date: new Date(post.timestamp),
+      date: isNaN(itemDate.getTime()) ? new Date() : itemDate,
       image: post.imageUrl || undefined,
       author: [
         {
@@ -131,8 +133,14 @@ async function generateFeed(username, profileData, store, platform, feedEntry) {
           link: siteUrl,
         },
       ],
-      category: labels.map(label => ({ name: label })),
-    });
+    };
+
+    // Only add categories when there are labels — avoids empty <category/> tags
+    if (labels.length > 0) {
+      item.category = labels.map(label => ({ name: label }));
+    }
+
+    feed.addItem(item);
   }
 
   // Write both RSS 2.0 and Atom
