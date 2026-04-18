@@ -225,3 +225,5 @@ Cambios tecnicos:
   - 3 campos: minimo (min), maximo (min), limite obsolescencia (h).
   - Boton Guardar: aplica cambios y reinicia el scheduler.
   - Boton Activar/Desactivar: habilita o deshabilita el sistema completo.
+
+test
