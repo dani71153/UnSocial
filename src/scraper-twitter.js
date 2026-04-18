@@ -6,7 +6,7 @@ const { BrowserWindow } = require('electron');
  * Chromium with the user's authenticated session, waits for JS to render,
  * then extracts tweets from the DOM and any embedded JSON.
  */
-async function scrapeTwitterProfile(username, _cookieString) {
+async function scrapeTwitterProfile(username, _cookieString, timeoutMs = 35000) {
   const profileUrl = `https://x.com/${username}`;
 
   const hidden = new BrowserWindow({
@@ -20,18 +20,18 @@ async function scrapeTwitterProfile(username, _cookieString) {
   });
 
   try {
-    const result = await loadAndExtract(hidden, profileUrl, username);
+    const result = await loadAndExtract(hidden, profileUrl, username, timeoutMs);
     return result;
   } finally {
     if (!hidden.isDestroyed()) hidden.destroy();
   }
 }
 
-function loadAndExtract(win, profileUrl, username) {
+function loadAndExtract(win, profileUrl, username, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error(`Timed out loading @${username}'s Twitter profile`));
-    }, 35000);
+    }, timeoutMs);
 
     win.webContents.on('did-finish-load', async () => {
       // Twitter/X is very JS-heavy; give extra time for tweets to render

@@ -356,12 +356,12 @@ async function refreshOldestFeed() {
     console.log(`[Smart-refresh] Refreshing @${feed.username} (${platform}), last checked: ${feed.lastChecked || 'never'}`);
 
     let profileData;
-    if (platform === 'twitter') profileData = await scrapeTwitterProfile(feed.username);
-    else if (platform === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl);
-    else if (platform === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username);
+    if (platform === 'twitter') profileData = await scrapeTwitterProfile(feed.username, null, store.get('timeoutTwitter', 35000));
+    else if (platform === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl, store.get('timeoutFacebook', 60000));
+    else if (platform === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username, store.get('timeoutLinkedIn', 45000));
     else if (platform === 'txt') profileData = await scrapeTxtFile(feed.fullUrl || feed.url);
     else if (platform === 'custom') profileData = await scrapeCustomSiteHeadless(feed.fullUrl, feed.selector, feed.alias || feed.username, feed.scrollSelector, feed.scrollCount);
-    else profileData = await scrapeInstagramProfile(feed.username);
+    else profileData = await scrapeInstagramProfile(feed.username, null, store.get('timeoutInstagram', 60000));
 
     const feedKey = (feed.feedKey || feed.username).replace(/\//g, '-');
     await generateFeed(feedKey, profileData, store, platform);
@@ -440,12 +440,12 @@ function startAutoRefresh() {
         try {
           const platform = feed.platform || 'instagram';
           let profileData;
-          if (platform === 'twitter') profileData = await scrapeTwitterProfile(feed.username);
-          else if (platform === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl);
-          else if (platform === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username);
+          if (platform === 'twitter') profileData = await scrapeTwitterProfile(feed.username, null, store.get('timeoutTwitter', 35000));
+          else if (platform === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl, store.get('timeoutFacebook', 60000));
+          else if (platform === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username, store.get('timeoutLinkedIn', 45000));
           else if (platform === 'txt') profileData = await scrapeTxtFile(feed.fullUrl || feed.url);
           else if (platform === 'custom') profileData = await scrapeCustomSiteHeadless(feed.fullUrl, feed.selector, feed.alias || feed.username, feed.scrollSelector, feed.scrollCount);
-          else profileData = await scrapeInstagramProfile(feed.username);
+          else profileData = await scrapeInstagramProfile(feed.username, null, store.get('timeoutInstagram', 60000));
 
           await generateFeed((feed.feedKey || feed.username).replace(/\//g, '-'), profileData, store, platform, feed);
 
@@ -633,12 +633,12 @@ app.whenReady().then(async () => {
             try {
               const plat = feed.platform || 'instagram';
               let profileData;
-              if (plat === 'twitter') profileData = await scrapeTwitterProfile(feed.username);
-              else if (plat === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl);
-              else if (plat === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username);
+              if (plat === 'twitter') profileData = await scrapeTwitterProfile(feed.username, null, store.get('timeoutTwitter', 35000));
+              else if (plat === 'facebook') profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl, store.get('timeoutFacebook', 60000));
+              else if (plat === 'linkedin') profileData = await scrapeLinkedInProfile(feed.username, store.get('timeoutLinkedIn', 45000));
               else if (plat === 'txt') profileData = await scrapeTxtFile(feed.fullUrl || feed.url);
               else if (plat === 'custom') profileData = await scrapeCustomSiteHeadless(feed.fullUrl, feed.selector, feed.alias || feed.username, feed.scrollSelector, feed.scrollCount);
-              else profileData = await scrapeInstagramProfile(feed.username);
+              else profileData = await scrapeInstagramProfile(feed.username, null, store.get('timeoutInstagram', 60000));
               const fk = (feed.feedKey || feed.username).replace(/\//g, '-');
               await generateFeed(fk, profileData, store, plat);
 
@@ -1250,15 +1250,15 @@ ipcMain.handle('add-feed', async (_e, url) => {
 
   let profileData;
   if (platform === 'twitter') {
-    profileData = await scrapeTwitterProfile(username);
+    profileData = await scrapeTwitterProfile(username, null, store.get('timeoutTwitter', 35000));
   } else if (platform === 'facebook') {
-    profileData = await scrapeFacebookProfile(username, parsed.subTab, parsed.fullUrl);
+    profileData = await scrapeFacebookProfile(username, parsed.subTab, parsed.fullUrl, store.get('timeoutFacebook', 60000));
   } else if (platform === 'linkedin') {
-    profileData = await scrapeLinkedInProfile(username);
+    profileData = await scrapeLinkedInProfile(username, store.get('timeoutLinkedIn', 45000));
   } else if (platform === 'txt') {
     profileData = await scrapeTxtFile(parsed.fullUrl);
   } else {
-    profileData = await scrapeInstagramProfile(username);
+    profileData = await scrapeInstagramProfile(username, null, store.get('timeoutInstagram', 60000));
   }
 
   if (profileData.posts.length < 1) {
@@ -1484,6 +1484,27 @@ ipcMain.handle('set-all-labels', (_e, labels) => {
   return labels;
 });
 
+ipcMain.handle('get-scrape-timeouts', () => ({
+  instagram: store.get('timeoutInstagram', 60000),
+  twitter:   store.get('timeoutTwitter',   35000),
+  facebook:  store.get('timeoutFacebook',  60000),
+  linkedin:  store.get('timeoutLinkedIn',  45000),
+}));
+
+ipcMain.handle('set-scrape-timeouts', (_e, timeouts) => {
+  const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+  if (timeouts.instagram != null) store.set('timeoutInstagram', clamp(timeouts.instagram, 5000, 300000));
+  if (timeouts.twitter   != null) store.set('timeoutTwitter',   clamp(timeouts.twitter,   5000, 300000));
+  if (timeouts.facebook  != null) store.set('timeoutFacebook',  clamp(timeouts.facebook,  5000, 300000));
+  if (timeouts.linkedin  != null) store.set('timeoutLinkedIn',  clamp(timeouts.linkedin,  5000, 300000));
+  return {
+    instagram: store.get('timeoutInstagram', 60000),
+    twitter:   store.get('timeoutTwitter',   35000),
+    facebook:  store.get('timeoutFacebook',  60000),
+    linkedin:  store.get('timeoutLinkedIn',  45000),
+  };
+});
+
 ipcMain.handle('get-http-cache-enabled', () => store.get('httpCacheEnabled', false));
 
 ipcMain.handle('set-http-cache-enabled', (_e, enabled) => {
@@ -1496,12 +1517,12 @@ ipcMain.handle('refresh-feed', async (_e, username, platform) => {
   let profileData;
   try {
     if (platform === 'twitter') {
-      profileData = await scrapeTwitterProfile(username);
+      profileData = await scrapeTwitterProfile(username, null, store.get('timeoutTwitter', 35000));
     } else if (platform === 'facebook') {
       const feedEntry = store.get('feeds').find((f) => f.username === username && f.platform === 'facebook');
-      profileData = await scrapeFacebookProfile(username, feedEntry?.subTab, feedEntry?.fullUrl);
+      profileData = await scrapeFacebookProfile(username, feedEntry?.subTab, feedEntry?.fullUrl, store.get('timeoutFacebook', 60000));
     } else if (platform === 'linkedin') {
-      profileData = await scrapeLinkedInProfile(username);
+      profileData = await scrapeLinkedInProfile(username, store.get('timeoutLinkedIn', 45000));
     } else if (platform === 'txt') {
       const feedEntry = store.get('feeds').find((f) => f.username === username && f.platform === 'txt');
       profileData = await scrapeTxtFile(feedEntry?.fullUrl || feedEntry?.url);
@@ -1509,7 +1530,7 @@ ipcMain.handle('refresh-feed', async (_e, username, platform) => {
       const feedEntry = store.get('feeds').find((f) => f.username === username && f.platform === 'custom');
       profileData = await scrapeCustomSiteHeadless(feedEntry?.fullUrl, feedEntry?.selector, feedEntry?.alias || username, feedEntry?.scrollSelector, feedEntry?.scrollCount);
     } else {
-      profileData = await scrapeInstagramProfile(username);
+      profileData = await scrapeInstagramProfile(username, null, store.get('timeoutInstagram', 60000));
     }
   } catch (err) {
     addNotification('error', `Failed to refresh @${username}: ${err.message}`);
@@ -1557,17 +1578,17 @@ ipcMain.handle('refresh-all', async () => {
       const platform = feed.platform || 'instagram';
       let profileData;
       if (platform === 'twitter') {
-        profileData = await scrapeTwitterProfile(feed.username);
+        profileData = await scrapeTwitterProfile(feed.username, null, store.get('timeoutTwitter', 35000));
       } else if (platform === 'facebook') {
-        profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl);
+        profileData = await scrapeFacebookProfile(feed.username, feed.subTab, feed.fullUrl, store.get('timeoutFacebook', 60000));
       } else if (platform === 'linkedin') {
-        profileData = await scrapeLinkedInProfile(feed.username);
+        profileData = await scrapeLinkedInProfile(feed.username, store.get('timeoutLinkedIn', 45000));
       } else if (platform === 'txt') {
         profileData = await scrapeTxtFile(feed.fullUrl || feed.url);
       } else if (platform === 'custom') {
         profileData = await scrapeCustomSiteHeadless(feed.fullUrl, feed.selector, feed.alias || feed.username, feed.scrollSelector, feed.scrollCount);
       } else {
-        profileData = await scrapeInstagramProfile(feed.username);
+        profileData = await scrapeInstagramProfile(feed.username, null, store.get('timeoutInstagram', 60000));
       }
       await generateFeed((feed.feedKey || feed.username).replace(/\//g, '-'), profileData, store, platform, feed);
 

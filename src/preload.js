@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('api', {
   getAllLabels: () => ipcRenderer.invoke('get-all-labels'),
   setAllLabels: (labels) => ipcRenderer.invoke('set-all-labels', labels),
 
+  // Scrape Timeouts
+  getScrapeTimeouts: () => ipcRenderer.invoke('get-scrape-timeouts'),
+  setScrapeTimeouts: (timeouts) => ipcRenderer.invoke('set-scrape-timeouts', timeouts),
+
   // HTTP Cache
   getHttpCacheEnabled: () => ipcRenderer.invoke('get-http-cache-enabled'),
   setHttpCacheEnabled: (enabled) => ipcRenderer.invoke('set-http-cache-enabled', enabled),

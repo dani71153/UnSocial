@@ -6,7 +6,7 @@ const { BrowserWindow } = require('electron');
  * Chromium with the user's authenticated session, waits for JS to render,
  * then extracts posts from the DOM.
  */
-async function scrapeLinkedInProfile(username) {
+async function scrapeLinkedInProfile(username, timeoutMs = 45000) {
   // Support both company pages and personal profiles
   const isCompany = username.startsWith('company/');
   const profileUrl = `https://www.linkedin.com/${isCompany ? username : `in/${username}`}/recent-activity/all/`;
@@ -22,18 +22,18 @@ async function scrapeLinkedInProfile(username) {
   });
 
   try {
-    const result = await loadAndExtract(hidden, profileUrl, username, isCompany);
+    const result = await loadAndExtract(hidden, profileUrl, username, isCompany, timeoutMs);
     return result;
   } finally {
     if (!hidden.isDestroyed()) hidden.destroy();
   }
 }
 
-function loadAndExtract(win, profileUrl, username, isCompany) {
+function loadAndExtract(win, profileUrl, username, isCompany, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error(`Timed out loading LinkedIn profile: ${username}`));
-    }, 45000);
+    }, timeoutMs);
 
     let handled = false;
     win.webContents.on('did-finish-load', async () => {

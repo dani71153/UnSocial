@@ -169,6 +169,30 @@ en el codigo original pero nunca fueron implementados. Se completaron en esta se
   intervalo fijo; el Smart Refresh refresca uno por uno con intervalo aleatorio.
 
 
+15. CONFIGURACION DE TIMEOUTS DE SCRAPING
+------------------------------------------
+Archivos: src/scraper.js, src/scraper-twitter.js, src/scraper-facebook.js,
+          src/scraper-linkedin.js, src/main.js, src/preload.js,
+          src/renderer/index.html, src/renderer/app.js
+
+- Cada funcion de scraping acepta ahora un parametro timeoutMs (ultimo argumento)
+  con el valor por defecto previo hardcodeado:
+  - Instagram: 60000 ms (aumentado de 30000 a 60000 en esta sesion).
+  - Twitter/X: 35000 ms.
+  - Facebook:  60000 ms.
+  - LinkedIn:  45000 ms.
+- Nuevos campos en el store: timeoutInstagram, timeoutTwitter, timeoutFacebook, timeoutLinkedIn.
+- 2 handlers IPC nuevos: get-scrape-timeouts, set-scrape-timeouts.
+  - set-scrape-timeouts aplica un clamp entre 5000 ms y 300000 ms por plataforma.
+- 2 metodos nuevos en preload.js: getScrapeTimeouts, setScrapeTimeouts.
+- Todos los call-sites de scrapers en main.js (6 sitios) leen el timeout del store.
+- Nueva seccion "Timeouts de scraping" en el panel de opciones:
+  - 4 inputs numericos (Instagram, Twitter/X, Facebook, LinkedIn) con step de 1000 ms.
+  - Boton Guardar: persiste los valores y los muestra actualizados.
+  - Boton Restaurar valores: vuelve a los defaults originales.
+- Los timeouts se cargan al iniciar la app junto con el resto de configuracion.
+
+
 14. CONFIGURACION DEL SMART STAGGERED REFRESH
 ----------------------------------------------
 Archivos: src/main.js, src/preload.js, src/renderer/index.html,

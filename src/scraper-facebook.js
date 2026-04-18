@@ -19,7 +19,7 @@ const { BrowserWindow } = require('electron');
  *      - Title in <object type="nested/pressable"><a href="/events/ID/">
  *      - Date/location in nested spans
  */
-async function scrapeFacebookProfile(identifier, subTab, fullUrl) {
+async function scrapeFacebookProfile(identifier, subTab, fullUrl, timeoutMs = 60000) {
   const isGroup = identifier.startsWith('groups/');
   const isEvent = identifier === 'events' || identifier.startsWith('events/') || subTab === 'my_events';
   let profileUrl;
@@ -42,18 +42,18 @@ async function scrapeFacebookProfile(identifier, subTab, fullUrl) {
   });
 
   try {
-    const result = await loadAndExtract(hidden, profileUrl, identifier, { isGroup, isEvent, subTab });
+    const result = await loadAndExtract(hidden, profileUrl, identifier, { isGroup, isEvent, subTab }, timeoutMs);
     return result;
   } finally {
     if (!hidden.isDestroyed()) hidden.destroy();
   }
 }
 
-function loadAndExtract(win, profileUrl, identifier, { isGroup, isEvent, subTab }) {
+function loadAndExtract(win, profileUrl, identifier, { isGroup, isEvent, subTab }, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error(`Timed out loading Facebook page: ${identifier}`));
-    }, 60000);
+    }, timeoutMs);
 
     let handled = false;
     win.webContents.on('did-finish-load', async () => {

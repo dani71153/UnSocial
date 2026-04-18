@@ -91,6 +91,9 @@ let globalFilterActive = false;
   // Load HTTP cache setting
   updateCacheUI(await window.api.getHttpCacheEnabled());
 
+  // Load scrape timeout settings
+  updateScrapeTimeoutsUI(await window.api.getScrapeTimeouts());
+
   // Load auto-refresh setting
   const arSettings = await window.api.getAutoRefresh();
   updateAutoRefreshUI(arSettings);
@@ -702,6 +705,41 @@ btnCacheToggle.addEventListener('click', async () => {
   await window.api.setHttpCacheEnabled(next);
   updateCacheUI(next);
   toast(next ? 'Cache HTTP activado' : 'Cache HTTP desactivado — los lectores RSS recibirán siempre el XML completo', 'success');
+});
+
+// ── Scrape Timeouts ───────────────────────────────────────────────────────
+
+const timeoutInstagramInput = $('#timeout-instagram-input');
+const timeoutTwitterInput   = $('#timeout-twitter-input');
+const timeoutFacebookInput  = $('#timeout-facebook-input');
+const timeoutLinkedInInput  = $('#timeout-linkedin-input');
+const btnScrapeTimeoutsSave  = $('#btn-scrape-timeouts-save');
+const btnScrapeTimeoutsReset = $('#btn-scrape-timeouts-reset');
+
+const TIMEOUT_DEFAULTS = { instagram: 60000, twitter: 35000, facebook: 60000, linkedin: 45000 };
+
+function updateScrapeTimeoutsUI({ instagram, twitter, facebook, linkedin }) {
+  timeoutInstagramInput.value = instagram;
+  timeoutTwitterInput.value   = twitter;
+  timeoutFacebookInput.value  = facebook;
+  timeoutLinkedInInput.value  = linkedin;
+}
+
+btnScrapeTimeoutsSave.addEventListener('click', async () => {
+  const result = await window.api.setScrapeTimeouts({
+    instagram: parseInt(timeoutInstagramInput.value, 10) || TIMEOUT_DEFAULTS.instagram,
+    twitter:   parseInt(timeoutTwitterInput.value,   10) || TIMEOUT_DEFAULTS.twitter,
+    facebook:  parseInt(timeoutFacebookInput.value,  10) || TIMEOUT_DEFAULTS.facebook,
+    linkedin:  parseInt(timeoutLinkedInInput.value,  10) || TIMEOUT_DEFAULTS.linkedin,
+  });
+  updateScrapeTimeoutsUI(result);
+  toast('Timeouts de scraping guardados', 'success');
+});
+
+btnScrapeTimeoutsReset.addEventListener('click', async () => {
+  const result = await window.api.setScrapeTimeouts(TIMEOUT_DEFAULTS);
+  updateScrapeTimeoutsUI(result);
+  toast('Timeouts restaurados a valores predeterminados', 'success');
 });
 
 const btnSaveFeedPublicBase = $('#btn-save-feed-public-base');

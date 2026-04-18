@@ -9,7 +9,7 @@ const { BrowserWindow } = require('electron');
  * Much more reliable than raw HTTP requests since Instagram requires
  * full JavaScript execution to render post grids.
  */
-async function scrapeInstagramProfile(username, _cookieString) {
+async function scrapeInstagramProfile(username, _cookieString, timeoutMs = 60000) {
   const profileUrl = `https://www.instagram.com/${username}/`;
 
   // Create a hidden browser window that shares the default session (logged-in cookies)
@@ -25,7 +25,7 @@ async function scrapeInstagramProfile(username, _cookieString) {
   });
 
   try {
-    const result = await loadAndExtract(hidden, profileUrl, username);
+    const result = await loadAndExtract(hidden, profileUrl, username, timeoutMs);
     return result;
   } finally {
     if (!hidden.isDestroyed()) hidden.destroy();
@@ -35,11 +35,11 @@ async function scrapeInstagramProfile(username, _cookieString) {
 /**
  * Navigate to the profile page, wait for it to render, then pull data out.
  */
-function loadAndExtract(win, profileUrl, username) {
+function loadAndExtract(win, profileUrl, username, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error(`Timed out loading @${username}'s profile`));
-    }, 30000);
+      reject(new Error(`Timed out loading @${username}'s profile. Asegúrate de estar logueado en Instagram en la app.`));
+    }, timeoutMs);
 
     win.webContents.on('did-finish-load', async () => {
       // Give the SPA time to render posts (Instagram loads them async)

@@ -346,6 +346,39 @@
             </div>
           </div>
 
+          <!-- Scrape Timeouts -->
+          <div class="token-section" id="scrape-timeouts-section">
+            <div class="token-header">
+              <span class="token-icon">⏳</span>
+              <strong>Timeouts de scraping (ms)</strong>
+            </div>
+            <div class="token-body">
+              <p class="lan-feed-base-hint">Tiempo máximo de espera al cargar un perfil. Auméntalo si ves errores de "Timed out" en redes lentas. Valor mínimo: 5000 ms, máximo: 300000 ms.</p>
+              <div class="smart-refresh-grid">
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="timeout-instagram-input">Instagram</label>
+                  <input type="number" id="timeout-instagram-input" class="modal-input modal-input-sm" min="5000" max="300000" step="1000" value="60000" />
+                </div>
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="timeout-twitter-input">Twitter / X</label>
+                  <input type="number" id="timeout-twitter-input" class="modal-input modal-input-sm" min="5000" max="300000" step="1000" value="35000" />
+                </div>
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="timeout-facebook-input">Facebook</label>
+                  <input type="number" id="timeout-facebook-input" class="modal-input modal-input-sm" min="5000" max="300000" step="1000" value="60000" />
+                </div>
+                <div class="smart-refresh-field">
+                  <label class="filter-label" for="timeout-linkedin-input">LinkedIn</label>
+                  <input type="number" id="timeout-linkedin-input" class="modal-input modal-input-sm" min="5000" max="300000" step="1000" value="45000" />
+                </div>
+              </div>
+              <div class="token-actions">
+                <button class="btn btn-outline btn-sm" id="btn-scrape-timeouts-save">Guardar</button>
+                <button class="btn btn-outline btn-sm" id="btn-scrape-timeouts-reset">Restaurar valores</button>
+              </div>
+            </div>
+          </div>
+
           <!-- HTTP Cache -->
           <div class="token-section" id="cache-section">
             <div class="token-header">
